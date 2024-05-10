@@ -1,0 +1,457 @@
+---
+title: "parse_nycu_dcard"
+author: "chiatzu"
+date: "2022/07"
+output:
+  html_document:
+    number_sections: no
+    theme: united
+    highlight: tango
+    toc: yes
+    toc_depth: 4
+    toc_float:
+      collapsed: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results = 'hold', comment = '#>', error = TRUE)
+```
+
+# library
+
+```{r}
+library(jsonlite)
+library(tidyverse)
+library(stringr)
+library(showtext)
+library(ggthemes)
+library(lubridate)
+library(jiebaR)
+```
+
+# 爬蟲
+
+## 文章列表
+
+```{r}
+board <- 'nycu' # // 填寫所選定之看板
+#board <- 'nctu'
+
+# Dcard_Article_df <- tibble()
+# url_init <- 
+#     str_c( "https://www.dcard.tw/service/api/v2/forums/", board, "/posts?popular=false&limit=100" )
+# total_page <- 600
+# for (i in c(15:50)) {
+#   #print(url_r)
+#   if (i == 0) { # 第一輪
+#     Dcard_Article_df <- url_init %>% fromJSON() %>% as_tibble()
+#     random_num <- runif(1, 10, 20) #隨機睡覺取值
+#     Sys.sleep(random_num) #睡覺中
+#     remove(random_num) #釋放變數
+#     
+#     print(paste(i,'RUN    ', 100*i/total_page, "%")) # 進度條
+#     next
+#   }
+#   last <- tail(Dcard_Article_df, 1) %>% select(id) %>% as.character() #取得最後一篇文章的 id
+#   url_paging <- str_c(url_init, "&before=", last) # 加在url中
+#   df_tmp <- fromJSON(url_paging) %>% as_tibble()
+#   Dcard_Article_df <- bind_rows(Dcard_Article_df, df_tmp)
+#   print(paste(i,'RUN    ', 100*i/total_page, "%"))
+#   random_num <- runif(1, 10, 20) #隨機睡覺取值
+#   Sys.sleep(random_num) #睡覺中
+#   remove(random_num) #釋放變數
+# } # for (i in c(0:total_page))
+# 
+# Dcard_Article_df  %>% view
+# 
+# #saveRDS(Dcard_Article_df, "Dcard_nycu_Article_df.rds")
+# tail(Dcard_Article_df, 3)
+```
+
+## 內文
+
+```{r}
+# #df_content <- tibble()
+# article_List <- Dcard_Article_df_nctu# 目標文章列表
+# list_len <- nrow(article_List)
+# for (i in c(2023:list_len)) { # -615 #1270 #1753 #1771 | #449
+#   article_id <- article_List$id[i]
+#   url <- str_c("https://www.dcard.tw/service/api/v2/posts/" ,article_id)
+#   raw_list <- url %>% fromJSON()  
+#   tmp <- tibble(
+#     id = raw_list[['id']],
+#     title = raw_list[['title']],
+#     content = raw_list[['content']],
+#     gender = raw_list[['gender']],
+#     topics = list(raw_list[['topics']])  ,
+#     school = raw_list[['school']],
+#     likeCount = raw_list[['likeCount']],
+#     commentCount = raw_list[['commentCount']],
+#     createTime = raw_list[['createdAt']] %>% as.Date(),
+#     forum = raw_list[['forumAlias']]
+#     )
+#   df_content <-bind_rows(df_content, tmp)
+#   print(paste(i, list_len, article_id, createTime, tmp$title))
+#   #break
+#   random_num <- runif(1, 5, 10) #隨機睡覺取值(一個值, 從幾秒,到幾秒)
+#   Sys.sleep(random_num) #睡覺中
+#   remove(random_num) #釋放變數 
+#   
+# }
+# 
+# 
+# df_content %>% view
+# 
+# saveRDS(df_content, "Dcard_nctu_ArticleContent_df.rds")
+# #saveRDS(df_content, "Dcard_nycu_ArticleContent_df.rds")
+# #df_content <- readRDS("Dcard_nctu_ArticleContent_df.rds")
+
+
+
+```
+
+# 視覺化
+
+## 變數
+
+```{r}
+Dcard_Article_df_nctu <- readRDS("./Dcard_nctu_Article_df.rds")
+Dcard_Article_df_nycu <- readRDS("./Dcard_nycu_Article_df.rds")
+Dcard_Content_df_nctu <- readRDS("./Dcard_nctu_ArticleContent_df.rds")
+Dcard_Content_df_nytu <- readRDS("./Dcard_nycu_ArticleContent_df.rds")
+Dcard_Content_df_nytu %>% view
+
+
+Dcard_Article_df.combine <- bind_rows(Dcard_Article_df_nctu, Dcard_Article_df_nycu)
+Dcard_Content_df.combine <- bind_rows(Dcard_Content_df_nctu, Dcard_Content_df_nytu)
+
+Dcard_Article_df.combine.brief <- Dcard_Article_df.combine %>%
+  select(title, createdAt, likeCount, commentCount, totalCommentCount, forumAlias, gender)
+Dcard_Content_df.combine.brief <- Dcard_Content_df.combine %>%
+  select(title, content, createTime, forum)
+
+```
+
+## 繪圖
+
+### Library
+
+```{r}
+showtext_auto(enable = TRUE)
+font_add("jf-openhuninn", "jf-openhuninn-1.1.ttf")
+font_add("jf-jinxuan-3.0 Book", "jf-jinxuan-3.0-book.otf")
+font_add("burnfont-1.2 Black","burnfont-1.2.otf")
+font_add("jf-jinxuanlatte-2.0 Heavy","jf-jinxuanlatte-2.0-heavy.otf")
+font_add("jf-jinxuan-3.0 ExtraBold","jf-jinxuan-3.0-extrabold.otf")
+
+th <- 
+  theme(
+    plot.title = element_text(size=18, family="jf-jinxuanlatte-2.0 Heavy"),
+    plot.subtitle = element_text(size=14,family="jf-jinxuan-3.0 Book"),
+    axis.title.x = element_text(size=13,family="jf-jinxuanlatte-2.0 Heavy"),
+    axis.title.y = element_text(size=13,family="jf-jinxuanlatte-2.0 Heavy"),
+    axis.text = element_text(size=12,family="jf-jinxuanlatte-2.0 Heavy"),
+    legend.text = element_text(size=15,family="jf-jinxuan-3.0 Book"),
+    legend.title = element_text(size=15,family="jf-jinxuan-3.0 Book"),
+    plot.caption  = element_text(color="gray",size=8,family="jf-jinxuan-3.0 Book"),
+    legend.position="top",
+    plot.margin = unit(c(0.8,0.8,0.8,0.8),"cm"), # 調整主圖表外的margin
+    )
+
+```
+
+### 貼文數量
+
+```{r, fig.height= 3, fig.width = 3}
+
+Dcard.plot.counttime <- Dcard_Article_df.combine.brief %>%
+  mutate(createdAt = as.Date(createdAt)) %>%
+  group_by(forumAlias) %>%
+  count(createdAt) 
+
+Dcard.plot.counttime %>%
+  ggplot() + aes( x=createdAt, y=n, fill=forumAlias) + geom_col() + 
+  theme_clean() + th + 
+  scale_x_date(date_labels = "%Y.%m.%d") +
+  scale_fill_manual(
+    name="Dcard 校版",
+    label=c("交通大學版","陽明交大版"),
+    values=c('nctu'="#DCD43F", 'nycu'="#01288F")
+  ) + 
+  labs(title = "陽交學生透過 Dcard 發文討論熱度增加",
+         subtitle = "兩校區同學皆可使用原校版及合校後的「陽明交通大學版」互動",
+         x = "日期",
+         y = "篇數",
+    caption = "資料來源/整理：Dcard 陽交版+交大版貼文數統計"
+       ) 
+
+```
+
+### 校長貼文數量
+
+```{r}
+date.list <- seq(as.Date("2019-02-01"), as.Date("2022-07-01"), by="month") %>% as_tibble %>% transmute(ym_time = value)
+Dcard.plot.president <- Dcard_Content_df.combine.brief %>%
+  mutate(createTime = as.Date(createTime)) %>%
+  filter(
+    str_detect(content, "校長") |
+    str_detect(content, "奇宏")
+  ) %>%
+  mutate(
+    year = year(createTime),
+    month = month(createTime)
+  ) %>%
+  mutate(
+    ym_time = str_c(year, ".", month)  %>% ym()
+  ) %>%
+  group_by(forum) %>%
+  count(ym_time) %>%
+  filter(ym_time != "2022-07-01") 
+```
+
+```{r, fig.height= 3, fig.width = 3}
+Dcard.plot.president %>%
+  ggplot() + aes( x=ym_time, y=n, fill=forum) + geom_col() + 
+  geom_vline(xintercept=as.Date("2021/02/01"), color="#01288F", size=.5) +
+  annotate(geom="text", x=as.Date("2021/07/20"), y=25, label="→ 合校：更名「國立陽明交通大學」", color="#01288F") +
+  theme_clean() + th +
+  scale_x_date( date_breaks="6 month", date_labels = "%Y/%m" ) +
+  scale_fill_manual(
+    name="Dcard 校版",
+    values=c('nctu'="#DCD43F", 'nycu'="#01288F")
+  ) + 
+  labs(title = "Dcard 討論「校長」比例高 2021年底後貼文數攀升",
+       subtitle = "2021年2月合校後，「陽交版」更被用於討論「校長」及相關校務議題",
+         x = "時間（年/月）",
+         y = "篇數",
+    caption = "資料來源/整理：Dcard 陽交版+交大版貼文提及「校長」、「林奇宏」之關鍵字統計。"
+       ) 
+
+```
+
+# 討論校長的標題怎麼下
+
+```{r}
+Dcard_Article_df.combine_president <- Dcard_Article_df.combine.brief %>%
+  mutate(createdAt = as.Date(createdAt)) %>%
+  filter(
+    str_detect(title, "校長") |
+    str_detect(title, "奇宏")
+  ) %>%
+  mutate(
+    year = year(createdAt),
+    month = month(createdAt)
+  ) %>%
+  mutate(
+    ym_time = str_c(year, ".", month)  %>% ym()
+  ) %>% 
+  arrange(desc(likeCount))
+
+Dcard_Article_df.combine_president
+```
+
+```{r}
+stopWords <- read_rds("./stopWords.rds")
+stopWords <- bind_rows(stopWords, tibble(word=c("想","文章","人","請","好","知道","一下","說","現在","後","已經","中","林","我們","先生","喔","做","致","住","新","板","當陽")))
+
+df_Content_rev <- Dcard_Article_df.combine_president %>%
+  select(title, forumAlias) %>% distinct() %>%
+  mutate(content = str_replace_all(title, "[^\u4e00-\u9fa5^a-z^A-Z^0-9]", "")) %>%
+  mutate(content = str_remove_all(title, "\n|\r|\t|:")) %>%
+  mutate(content = str_replace_all(title, " ", "")) %>%
+  mutate(content = str_replace_all(title, "老師", "教師")) %>%
+  mutate(content = str_replace_all(title, "林奇宏", "奇宏")) %>%
+  mutate(content = str_replace_all(title, "奇宏", "林奇宏")) 
+
+cutter <- worker()
+new_user_word(cutter, words = c("林奇宏","陽明交大","篇","選課系統","校務會議","會議代表","校務","校徽","e3","E3","信","13舍","9舍","8舍"))
+WF_Result <- df_Content_rev %>%
+  mutate(content_segment = purrr::map(content, function(x)segment(x, cutter))) %>%
+  unnest(content_segment) %>%
+  rename(word = content_segment) %>% 
+  #filter(!word %in% as.character(stopWords$word)) %>%
+  anti_join(stopWords) %>%
+  group_by(word) %>% 
+  summarise(word_frequency =  n())%>%
+  arrange(desc(word_frequency)) %>%
+  ungroup %>%
+  mutate(
+    word_frequency = 100*round(word_frequency/sum(word_frequency), 3)
+  )  %>%
+  filter( word_frequency >= 0.5, word_frequency < 10 )
+WF_Result
+```
+
+```{r, fig.height= 3, fig.width = 3}
+WF_Result %>%
+  mutate( word = reorder(word, word_frequency)) %>%
+  ggplot() + aes( x=word, y=word_frequency) + geom_col(fill="#01288F") +
+  coord_flip() +
+  theme_clean() + th +
+  labs(title = "當討論「校長」時，Dcard 上大家都討論些什麼？",
+       subtitle = "文章標題中，同學們常稱校長忙「寫信」",
+         x = "",
+         y = "詞頻(%)",
+    caption = "資料來源/整理：Dcard 陽交版貼文內容分析"
+       ) 
+
+```
+
+```{r}
+Dcard_Article_df.combine_president <- Dcard_Article_df.combine.brief %>%
+  mutate(createdAt = as.Date(createdAt)) %>%
+  filter(
+    str_detect(title, "校長") |
+    str_detect(title, "奇宏")
+  ) %>%
+  mutate(
+    year = year(createdAt),
+    month = month(createdAt)
+  ) %>%
+  mutate(
+    ym_time = str_c(year, ".", month)  %>% ym()
+  ) %>% 
+  arrange(desc(likeCount)) %>%
+  filter(
+    totalCommentCount >= 30 | likeCount >= 40
+  )
+
+Dcard_Article_df.combine_president
+```
+
+```{r}
+Dcard_Article_df.combine_president_title <- Dcard_Article_df.combine_president %>%
+  mutate(
+    thinking = ifelse(
+      str_detect(title, "林奇宏，該醒了") |
+        str_detect(title, "林奇宏大刀闊斧砍掉跨域") |
+        str_detect(title, "所以林奇宏到底做了什麼事情") |
+        str_detect(title, "致校長公開信") |
+        str_detect(title, "其實校長很恨這間學校對ㄅ") |
+        str_detect(title, "九十舍準備炸開 林奇宏什麼時") | 
+        str_detect(title, "校長終於寫完信") |
+        str_detect(title, "為了陽明交大 我們應該要換掉林奇宏") |
+        str_detect(title, "林奇宏在4月13日校務會") |
+        str_detect(title, "砍自費醫名額成立學士")
+      , "負面討論", ifelse(
+        str_detect(title, "校長是醫師果然不一樣")
+      , "正面討論", ifelse(
+        str_detect(title, "維基百科 校長的研究領") |
+        str_detect(title, "陽明交大新校長選出") |
+        str_detect(title, "本人 林奇宏校長正面警告胡亂盜")
+      , "其他", "")# ifelse
+        )#ifelse
+      )#ifelse
+    ) %>%
+  select(title, likeCount, thinking)
+Dcard_Article_df.combine_president_title
+```
+
+```{r, fig.height= 3, fig.width = 3}
+Dcard_Article_df.combine_president_title %>%
+  rename( `討論內容` = thinking) %>%
+  mutate( title = reorder(title, likeCount)) %>%
+  ggplot() + aes( x=title, y=likeCount, fill=討論內容) + geom_col() +
+  coord_flip() +
+  theme_clean() + th +
+  theme(
+    axis.text.y = element_text(size= 10,family="jf-jinxuanlatte-2.0 Heavy"),
+    plot.subtitle = element_text(size= 10,family="jf-jinxuan-3.0 Book"),
+  ) +
+  labs(title = "Dcard 談論「校長」文章負面敘述居多",
+       subtitle = "多與「校務發展」、「疫情政策」有關",
+         x = "",
+         y = "貼文熱度（按讚數）",
+    caption = "資料來源/整理：Dcard 陽交版+交大版貼文分析"
+       ) +
+    theme(
+      plot.title = element_text(hjust = 3.5, vjust=1),
+      plot.subtitle = element_text(hjust = -3.32, vjust=0.5),
+      legend.position = c(0.85, 0.13),
+      legend.title = element_text(size=8),
+      legend.text = element_text(size=8)
+      ) +
+  scale_fill_manual(
+    name="討論內容",
+    values=c('正面討論'="#324CA2", '負面討論'="#AF103B", '其他'="#AAAAAA")
+  )
+
+```
+
+# 貼文內容分析
+
+
+```{r}
+#### Library
+library(jiebaR)
+library(tidytext)
+library(widyr)
+```
+
+```{r}
+df_content_nycu <- Dcard_Content_df.combine.brief
+stopWords <- read_rds("./stopWords.rds")
+stopWords <- bind_rows(stopWords, tibble(word=c("想","文章","人","請","好","知道","一下","說","現在","後","已經","中","林","做","月","年","新","再","我們","一個","覺得","真的","應該","一定","需要","下","問題","同學","目前","前","一直","行政","過程","最後","認為","相關","重要","許多","看到","一些","直接")))
+df_Content_rev <- df_content_nycu %>%
+  filter(
+    str_detect(content, "校長") |
+    str_detect(content, "奇宏")
+  ) %>%
+  select(title, content) %>% distinct() %>%
+  mutate(content = str_replace_all(content, "[^\u4e00-\u9fa5^a-z^A-Z^0-9]", "")) %>%
+  mutate(content = str_remove_all(content, "\n|\r|\t|:")) %>%
+  mutate(content = str_replace_all(content, " ", "")) %>%
+  mutate(content = str_replace_all(content, "老師", "教師")) %>%
+  mutate(content = str_replace_all(content, "林奇宏", "奇宏")) %>%
+  mutate(content = str_replace_all(content, "奇宏", "林奇宏")) 
+
+cutter <- worker()
+new_user_word(cutter, words = c("林奇宏","奇宏","陽明交大","篇","選課系統","校務會議","會議代表","校務","校徽","e3","E3","寫信","打倒","副校長"))
+WF_Result <- df_Content_rev %>%
+  mutate(content_segment = purrr::map(content, function(x)segment(x, cutter))) %>%
+  unnest(content_segment) %>%
+  rename(word = content_segment) %>% 
+  anti_join(stopWords) %>%
+  group_by(word) %>% 
+  summarise(word_frequency =  n())%>%
+  arrange(desc(word_frequency)) %>%
+  ungroup %>%
+  filter(word != '林奇宏',word != '校長') %>%
+  filter(word_frequency > 15) %>%
+  mutate(
+    word_frequency = 100*round(word_frequency/sum(word_frequency), 5),
+  ) %>%
+  filter(
+    word_frequency > 0.95
+  )
+WF_Result
+
+```
+
+```{r, fig.height= 3, fig.width = 3}
+WF_Result %>%
+  mutate( condition = if_else(word %in% c("校務","設計","校徽","平等","校務會議","副校長","課程","合校","問題","未來","整合","通識","宿舍"), "校務相關","其他") ) %>%
+  mutate( word = reorder(word, word_frequency)) %>%
+  ggplot() + aes( x=word, y=word_frequency, fill=condition) + geom_col() +
+  coord_flip() +
+  theme_clean() + th +
+  theme(
+    axis.text.y = element_text(size= 10,family="jf-jinxuanlatte-2.0 Heavy"),
+    plot.subtitle = element_text(size= 10,family="jf-jinxuan-3.0 Book"),
+  ) +
+  labs(title = "合校一年多來討論「校長」時常談論校務相關內容",
+       subtitle = "文章內容中，「教授」、「校友」、「會議代表」常被引用，校徽等識別設計議題亦常被提及",
+         x = "",
+         y = "詞頻(%)",
+    caption = "資料來源/整理：Dcard 陽交版貼文內容分析"
+       ) +
+  scale_fill_manual(
+    name="談論內容",
+    values=c('校務相關'="skyblue", '其他'="#01288F")
+  ) +
+  theme(
+    legend.position = c(0.85, 0.13),
+    legend.title = element_text(size=8),
+    legend.text = element_text(size=8)
+  )
+```
